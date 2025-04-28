@@ -1,29 +1,34 @@
 #ifndef RECCHECK
-// For debugging
 #include <iostream>
 #include <vector>
 #include <map>
 #include <set>
-using namespace std;
 #endif
 #include "wordle.h"
 #include "dict-eng.h"
 
+using namespace std;
 
-//helper
-void backtrack(vector<char>& word, const vector<int>& var_pos, unsigned int var_index, map<char, int> remaining_required, set<string>& candidates);
+// Helper prototype
+void backtrack(
+    vector<char>& word,
+    const vector<int>& var_pos,
+    size_t var_index,
+    map<char, int> remaining_required,
+    const set<string>& dict,
+    set<string>& result
+);
 
-// Definition of primary wordle function
 set<string> wordle(
     const string& in,
     const string& floating,
     const set<string>& dict)
-{  // Add your code here
-    //get variable positions 
+{
+    // prrocess input to find variable positions (1 loop)
     vector<int> var_pos;
     vector<char> word;
     map<char, int> fixed_counts;
-    for (unsigned int i = 0; i < in.size(); ++i) {
+    for (size_t i = 0; i < in.size(); ++i) { // Loop 1/5
         if (in[i] == '-') {
             var_pos.push_back(i);
             word.push_back('-');
@@ -33,70 +38,71 @@ set<string> wordle(
         }
     }
 
-    // compute floating counts.
+    // compute floating counts (1 loop)
     map<char, int> floating_counts;
-    for (char c : floating) {
+    for (char c : floating) { // Loop 2/5
         floating_counts[c]++;
     }
 
-    // compute required counts.
+    // compute required counts (1 loop)
     map<char, int> required_counts;
-    for (auto& pair : floating_counts) {
+    int sum_required = 0;
+    for (const auto& pair : floating_counts) { // Loop 3/5
         char c = pair.first;
         int required = pair.second - fixed_counts[c];
         if (required > 0) {
             required_counts[c] = required;
+            sum_required += required;
         }
     }
 
-    // check sum of required counts
-    unsigned int sum_required = 0;
-    for (auto& pair : required_counts) {
-        sum_required += pair.second;
-    }
-
-    if (sum_required > var_pos.size()) {
+    // arly exit check (no loop)
+    if (sum_required > static_cast<int>(var_pos.size())) {
         return {};
     }
 
-    // candidates
-    set<string> candidates;
-    backtrack(word, var_pos, 0, required_counts, candidates);
-
-    // filter candidates 
+    // check words recursively
     set<string> result;
-    for (const string& s : candidates) {
-        if (dict.find(s) != dict.end()) {
-            result.insert(s);
-        }
-    }
-
+    backtrack(word, var_pos, 0, required_counts, dict, result);
     return result;
 }
 
-// helper function 
-void backtrack(vector<char>& word, const vector<int>& var_pos, unsigned int var_index, map<char, int> remaining_required, set<string>& candidates) {
+// backtrack helper (1 loop)
+void backtrack(
+    vector<char>& word,
+    const vector<int>& var_pos,
+    size_t var_index,
+    map<char, int> remaining_required,
+    const set<string>& dict,
+    set<string>& result)
+{
+    
     if (var_index == var_pos.size()) {
         if (remaining_required.empty()) {
-            string s(word.begin(), word.end());
-            candidates.insert(s);
+            string candidate(word.begin(), word.end());
+            if (dict.find(candidate) != dict.end()) { // Built-in find (not counted)
+                result.insert(candidate);
+            }
         }
         return;
     }
 
-    int pos = var_pos[var_index];
+    // try all letters (1 loop)
+    const int pos = var_pos[var_index]; 
     for (char c = 'a'; c <= 'z'; ++c) {
-        map<char, int> new_remaining = remaining_required;
-        auto it = new_remaining.find(c);
-        if (it != new_remaining.end()) {
-            if (it->second > 0) {
-                it->second--;
-                if (it->second == 0) {
-                    new_remaining.erase(it);
-                }
+        map<char, int> new_req = remaining_required;
+        auto it = new_req.find(c);
+        
+        
+        if (it != new_req.end()) {
+            if (it->second <= 0) continue;
+            if (--(it->second) == 0) {
+                new_req.erase(it);
             }
         }
+
+        // recurse
         word[pos] = c;
-        backtrack(word, var_pos, var_index + 1, new_remaining, candidates);
+        backtrack(word, var_pos, var_index + 1, new_req, dict, result);
     }
 }
