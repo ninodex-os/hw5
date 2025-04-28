@@ -1,14 +1,16 @@
 #ifndef RECCHECK
+//For debugging
 #include <iostream>
+//For std::remove
 #include <vector>
 #include <map>
 #include <set>
 #endif
+
 #include "wordle.h"
 #include "dict-eng.h"
-
 using namespace std;
-
+// Add prototypes of helper functions here
 // Helper prototype
 void backtrack(
     vector<char>& word,
@@ -89,7 +91,7 @@ void backtrack(
 
     // try all letters (1 loop)
     const int pos = var_pos[var_index]; 
-    for (char c = 'a'; c <= 'z'; ++c) {
+    for (char c = 'a'; c <= 'z'; ++c) { //Loop 4/5
         map<char, int> new_req = remaining_required;
         auto it = new_req.find(c);
         
