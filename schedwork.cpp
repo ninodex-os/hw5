@@ -2,7 +2,6 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
-#include <algorithm>
 #endif
 
 #include "schedwork.h"
@@ -85,8 +84,6 @@ static bool scheduleDay(
     if (available.size() < dailyNeed) {
         return false;
     }
-
-    sort(available.begin(), available.end()); // Allowed single setup loop
 
     vector<Worker_T> current;
     return generateCombinations(available, 0, current, dailyNeed, shifts, day, 
