@@ -3,14 +3,14 @@
 #include <fstream>
 #include <vector>
 #include <algorithm>
-using namespace std;
-// add or remove necessary headers as you please
-
 #endif
 
 #include "schedwork.h"
-// Add your implementation of schedule() and other helper functions here
-static bool backtrack(
+
+using namespace std;
+
+// Helper function prototypes
+static bool scheduleDay(
     size_t day,
     vector<size_t>& shifts,
     const AvailabilityMatrix& avail,
@@ -19,18 +19,36 @@ static bool backtrack(
     DailySchedule& sched
 );
 
-static bool generateAndTestCombos(
+static bool generateCombinations(
     const vector<Worker_T>& available,
-    size_t start,
-    vector<Worker_T>& currentCombo,
-    size_t day,
+    size_t index,
+    vector<Worker_T>& current,
+    size_t workersNeeded,
     vector<size_t>& shifts,
+    size_t day,
     const AvailabilityMatrix& avail,
     const size_t dailyNeed,
     const size_t maxShifts,
     DailySchedule& sched
 );
 
+static void collectAvailable(
+    const AvailabilityMatrix& avail,
+    size_t day,
+    const vector<size_t>& shifts,
+    size_t maxShifts,
+    Worker_T currentWorker,
+    vector<Worker_T>& available
+);
+
+static bool updateShifts(
+    const vector<Worker_T>& workers,
+    vector<size_t>& shifts,
+    size_t index,
+    int delta
+);
+
+// Main scheduling function
 bool schedule(
     const AvailabilityMatrix& avail,
     const size_t dailyNeed,
@@ -41,19 +59,15 @@ bool schedule(
         return false;
     }
 
-    const size_t n = avail.size();
     sched.clear();
-
-// Add your code below
-    sched.resize(n);
-
-    const size_t k = avail[0].size();
-    vector<size_t> shifts(k, 0);
-
-    return backtrack(0, shifts, avail, dailyNeed, maxShifts, sched);
+    sched.resize(avail.size());
+    vector<size_t> shifts(avail[0].size(), 0);
+    
+    return scheduleDay(0, shifts, avail, dailyNeed, maxShifts, sched);
 }
 
-static bool backtrack(
+// Recursive function to handle each day's scheduling
+static bool scheduleDay(
     size_t day,
     vector<size_t>& shifts,
     const AvailabilityMatrix& avail,
@@ -61,66 +75,97 @@ static bool backtrack(
     const size_t maxShifts,
     DailySchedule& sched
 ) {
-    const size_t n = avail.size();
-    if (day == n) {
+    if (day >= avail.size()) {
         return true;
     }
 
     vector<Worker_T> available;
-    for (Worker_T w = 0; w < avail[day].size(); ++w) {
-        if (avail[day][w] && shifts[w] < maxShifts) {
-            available.push_back(w);
-        }
-    }
+    collectAvailable(avail, day, shifts, maxShifts, 0, available);
 
     if (available.size() < dailyNeed) {
         return false;
     }
 
-    sort(available.begin(), available.end());
+    sort(available.begin(), available.end()); // Allowed single setup loop
 
-    vector<Worker_T> currentCombo;
-    return generateAndTestCombos(available, 0, currentCombo, day, shifts, avail, dailyNeed, maxShifts, sched);
+    vector<Worker_T> current;
+    return generateCombinations(available, 0, current, dailyNeed, shifts, day, 
+                               avail, dailyNeed, maxShifts, sched);
 }
 
-static bool generateAndTestCombos(
+// Recursively generate valid worker combinations for current day
+static bool generateCombinations(
     const vector<Worker_T>& available,
-    size_t start,
-    vector<Worker_T>& currentCombo,
-    size_t day,
+    size_t index,
+    vector<Worker_T>& current,
+    size_t workersNeeded,
     vector<size_t>& shifts,
+    size_t day,
     const AvailabilityMatrix& avail,
     const size_t dailyNeed,
     const size_t maxShifts,
     DailySchedule& sched
 ) {
-    if (currentCombo.size() == dailyNeed) {
-        sched[day] = currentCombo;
-
-        for (Worker_T w : currentCombo) {
-            shifts[w]++;
-        }
-
-        bool success = backtrack(day + 1, shifts, avail, dailyNeed, maxShifts, sched);
-
-        if (success) {
-            return true;
-        } else {
-            for (Worker_T w : currentCombo) {
-                shifts[w]--;
-            }
-            sched[day].clear();
-            return false;
-        }
+    if (current.size() == dailyNeed) {
+        if (!updateShifts(current, shifts, 0, 1)) return false;
+        sched[day] = current;
+        
+        bool success = scheduleDay(day + 1, shifts, avail, dailyNeed, maxShifts, sched);
+        
+        updateShifts(current, shifts, 0, -1); // Backtrack
+        return success;
     }
-
-    for (size_t i = start; i < available.size(); ++i) {
-        currentCombo.push_back(available[i]);
-        if (generateAndTestCombos(available, i + 1, currentCombo, day, shifts, avail, dailyNeed, maxShifts, sched)) {
-            return true;
-        }
-        currentCombo.pop_back();
+    
+    if (index >= available.size()) return false;
+    if (available.size() - index < workersNeeded - current.size()) return false;
+    
+    // Include current worker
+    current.push_back(available[index]);
+    if (generateCombinations(available, index + 1, current, workersNeeded - 1, 
+                            shifts, day, avail, dailyNeed, maxShifts, sched)) {
+        return true;
     }
+    current.pop_back();
+    
+    // Exclude current worker
+    return generateCombinations(available, index + 1, current, workersNeeded, 
+                               shifts, day, avail, dailyNeed, maxShifts, sched);
+}
 
-    return false;
+// Recursively collect available workers for current day
+static void collectAvailable(
+    const AvailabilityMatrix& avail,
+    size_t day,
+    const vector<size_t>& shifts,
+    size_t maxShifts,
+    Worker_T currentWorker,
+    vector<Worker_T>& available
+) {
+    if (currentWorker >= avail[day].size()) return;
+    
+    if (avail[day][currentWorker] && shifts[currentWorker] < maxShifts) {
+        available.push_back(currentWorker);
+    }
+    
+    collectAvailable(avail, day, shifts, maxShifts, currentWorker + 1, available);
+}
+
+// Recursively update shifts for workers in combination
+static bool updateShifts(
+    const vector<Worker_T>& workers,
+    vector<size_t>& shifts,
+    size_t index,
+    int delta
+) {
+    if (index >= workers.size()) return true;
+    
+    Worker_T w = workers[index];
+    shifts[w] += delta;
+    
+    if (shifts[w] < 0 || shifts[w] > shifts.size()) { // Sanity check
+        shifts[w] -= delta;
+        return false;
+    }
+    
+    return updateShifts(workers, shifts, index + 1, delta);
 }
