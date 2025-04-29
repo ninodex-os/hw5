@@ -103,30 +103,44 @@ static bool generateCombinations(
     const size_t maxShifts,
     DailySchedule& sched
 ) {
+    // Check if we've selected enough workers for this day
     if (current.size() == dailyNeed) {
-        if (!updateShifts(current, shifts, 0, 1)) return false;
+        // Make a copy of the vector before modifying shifts
         sched[day] = current;
         
+        // Update shifts count for all selected workers
+        for (size_t i = 0; i < current.size(); i++) {
+            shifts[current[i]]++;
+        }
+        
+        // Try scheduling the next day
         bool success = scheduleDay(day + 1, shifts, avail, dailyNeed, maxShifts, sched);
         
-        updateShifts(current, shifts, 0, -1); // Backtrack
+        // Backtrack - undo the shift assignments
+        for (size_t i = 0; i < current.size(); i++) {
+            shifts[current[i]]--;
+        }
+        
         return success;
     }
     
+    // Bounds checking
     if (index >= available.size()) return false;
+    
+    // Early termination - not enough workers left to consider
     if (available.size() - index < workersNeeded - current.size()) return false;
     
-    // Include current worker
+    // Try including the current worker
     current.push_back(available[index]);
     if (generateCombinations(available, index + 1, current, workersNeeded - 1, 
-                            shifts, day, avail, dailyNeed, maxShifts, sched)) {
+                           shifts, day, avail, dailyNeed, maxShifts, sched)) {
         return true;
     }
     current.pop_back();
     
-    // Exclude current worker
+    // Try excluding the current worker
     return generateCombinations(available, index + 1, current, workersNeeded, 
-                               shifts, day, avail, dailyNeed, maxShifts, sched);
+                              shifts, day, avail, dailyNeed, maxShifts, sched);
 }
 
 // Recursively collect available workers for current day
@@ -140,13 +154,17 @@ static void collectAvailable(
 ) {
     if (currentWorker >= avail[day].size()) return;
     
+    // Only add if worker is available and hasn't reached shift limit
     if (avail[day][currentWorker] && shifts[currentWorker] < maxShifts) {
         available.push_back(currentWorker);
     }
     
+    // Continue with next worker
     collectAvailable(avail, day, shifts, maxShifts, currentWorker + 1, available);
 }
 
+
+// Recursively update shifts for workers in combination
 // Recursively update shifts for workers in combination
 static bool updateShifts(
     const vector<Worker_T>& workers,
@@ -159,10 +177,17 @@ static bool updateShifts(
     Worker_T w = workers[index];
     shifts[w] += delta;
     
-    if (shifts[w] < 0 || shifts[w] > shifts.size()) { // Sanity check
+    // Make sure shift count is valid (not negative and not exceeding maximum)
+    if (shifts[w] > shifts.size()) { 
         shifts[w] -= delta;
         return false;
     }
     
-    return updateShifts(workers, shifts, index + 1, delta);
+    if (updateShifts(workers, shifts, index + 1, delta)) {
+        return true;
+    }
+    
+    // If updating remaining shifts failed, backtrack this one too
+    shifts[w] -= delta;
+    return false;
 }
