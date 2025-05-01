@@ -1,193 +1,170 @@
 #ifndef RECCHECK
+#include <set>
 #include <iostream>
 #include <fstream>
+#include <string>
 #include <vector>
+#include <map>
+#include <algorithm>
+// add or remove necessary headers as you please
 #endif
 
 #include "schedwork.h"
 
 using namespace std;
 
-// Helper function prototypes
-static bool scheduleDay(
-    size_t day,
-    vector<size_t>& shifts,
+// a constant that can be used to indicate an INVALID 
+// worker ID if that is useful to your implementation.
+// Feel free to not use or delete.
+static const Worker_T INVALID_ID = (unsigned int)-1;
+
+// Add prototypes for any helper functions here
+bool scheduleHelper(
     const AvailabilityMatrix& avail,
     const size_t dailyNeed,
     const size_t maxShifts,
-    DailySchedule& sched
-);
-
-static bool generateCombinations(
-    const vector<Worker_T>& available,
-    size_t index,
-    vector<Worker_T>& current,
-    size_t workersNeeded,
-    vector<size_t>& shifts,
+    DailySchedule& sched,
+    vector<size_t>& shiftsWorked,
     size_t day,
+    size_t workerPosition);
+
+bool tryNextWorker(
     const AvailabilityMatrix& avail,
     const size_t dailyNeed,
     const size_t maxShifts,
-    DailySchedule& sched
-);
-
-static void collectAvailable(
-    const AvailabilityMatrix& avail,
+    DailySchedule& sched,
+    vector<size_t>& shiftsWorked,
     size_t day,
-    const vector<size_t>& shifts,
-    size_t maxShifts,
-    Worker_T currentWorker,
-    vector<Worker_T>& available
-);
+    size_t workerPosition,
+    size_t workerId);
 
-static bool updateShifts(
-    const vector<Worker_T>& workers,
-    vector<size_t>& shifts,
-    size_t index,
-    int delta
-);
+bool workerAlreadyScheduled(
+    const DailySchedule& sched,
+    size_t day,
+    size_t currentPosition,
+    Worker_T workerId);
 
-// Main scheduling function
+bool checkPreviousPosition(
+    const DailySchedule& sched,
+    size_t day,
+    size_t position,
+    Worker_T workerId);
+
+
+// Add your implementation of schedule() and other helper functions here
 bool schedule(
     const AvailabilityMatrix& avail,
     const size_t dailyNeed,
     const size_t maxShifts,
     DailySchedule& sched
-) {
-    if (avail.empty() || dailyNeed == 0 || maxShifts == 0) {
+)
+{
+    if(avail.size() == 0U){
         return false;
     }
-
     sched.clear();
-    sched.resize(avail.size());
-    vector<size_t> shifts(avail[0].size(), 0);
     
-    return scheduleDay(0, shifts, avail, dailyNeed, maxShifts, sched);
+    // Initialize schedule with empty days
+    sched.resize(avail.size(), vector<Worker_T>(dailyNeed, INVALID_ID));
+    
+    // Track shifts worked by each worker
+    vector<size_t> shiftsWorked(avail[0].size(), 0);
+    
+    // Start recursive scheduling at day 0, position 0
+    return scheduleHelper(avail, dailyNeed, maxShifts, sched, shiftsWorked, 0, 0);
 }
 
-// Recursive function to handle each day's scheduling
-static bool scheduleDay(
-    size_t day,
-    vector<size_t>& shifts,
+bool scheduleHelper(
     const AvailabilityMatrix& avail,
     const size_t dailyNeed,
     const size_t maxShifts,
-    DailySchedule& sched
-) {
+    DailySchedule& sched,
+    vector<size_t>& shiftsWorked,
+    size_t day,
+    size_t workerPosition)
+{
+    // Base case: we've scheduled all days
     if (day >= avail.size()) {
         return true;
     }
-
-    vector<Worker_T> available;
-    collectAvailable(avail, day, shifts, maxShifts, 0, available);
-
-    if (available.size() < dailyNeed) {
-        return false;
+    
+    // If we've filled all worker positions for this day, move to next day
+    if (workerPosition >= dailyNeed) {
+        return scheduleHelper(avail, dailyNeed, maxShifts, sched, shiftsWorked, day + 1, 0);
     }
-
-    vector<Worker_T> current;
-    return generateCombinations(available, 0, current, dailyNeed, shifts, day, 
-                               avail, dailyNeed, maxShifts, sched);
+    
+    // Try each worker for the current position
+    return tryNextWorker(avail, dailyNeed, maxShifts, sched, shiftsWorked, day, workerPosition, 0);
 }
 
-// Recursively generate valid worker combinations for current day
-static bool generateCombinations(
-    const vector<Worker_T>& available,
-    size_t index,
-    vector<Worker_T>& current,
-    size_t workersNeeded,
-    vector<size_t>& shifts,
-    size_t day,
+bool tryNextWorker(
     const AvailabilityMatrix& avail,
     const size_t dailyNeed,
     const size_t maxShifts,
-    DailySchedule& sched
-) {
-    // Check if we've selected enough workers for this day
-    if (current.size() == dailyNeed) {
-        // Make a copy of the vector before modifying shifts
-        sched[day] = current;
-        
-        // Update shifts count for all selected workers
-        for (size_t i = 0; i < current.size(); i++) {
-            shifts[current[i]]++;
-        }
-        
-        // Try scheduling the next day
-        bool success = scheduleDay(day + 1, shifts, avail, dailyNeed, maxShifts, sched);
-        
-        // Backtrack - undo the shift assignments
-        for (size_t i = 0; i < current.size(); i++) {
-            shifts[current[i]]--;
-        }
-        
-        return success;
-    }
-    
-    // Bounds checking
-    if (index >= available.size()) return false;
-    
-    // Early termination - not enough workers left to consider
-    if (available.size() - index < workersNeeded - current.size()) return false;
-    
-    // Try including the current worker
-    current.push_back(available[index]);
-    if (generateCombinations(available, index + 1, current, workersNeeded - 1, 
-                           shifts, day, avail, dailyNeed, maxShifts, sched)) {
-        return true;
-    }
-    current.pop_back();
-    
-    // Try excluding the current worker
-    return generateCombinations(available, index + 1, current, workersNeeded, 
-                              shifts, day, avail, dailyNeed, maxShifts, sched);
-}
-
-// Recursively collect available workers for current day
-static void collectAvailable(
-    const AvailabilityMatrix& avail,
+    DailySchedule& sched,
+    vector<size_t>& shiftsWorked,
     size_t day,
-    const vector<size_t>& shifts,
-    size_t maxShifts,
-    Worker_T currentWorker,
-    vector<Worker_T>& available
-) {
-    if (currentWorker >= avail[day].size()) return;
-    
-    // Only add if worker is available and hasn't reached shift limit
-    if (avail[day][currentWorker] && shifts[currentWorker] < maxShifts) {
-        available.push_back(currentWorker);
-    }
-    
-    // Continue with next worker
-    collectAvailable(avail, day, shifts, maxShifts, currentWorker + 1, available);
-}
-
-
-// Recursively update shifts for workers in combination
-// Recursively update shifts for workers in combination
-static bool updateShifts(
-    const vector<Worker_T>& workers,
-    vector<size_t>& shifts,
-    size_t index,
-    int delta
-) {
-    if (index >= workers.size()) return true;
-    
-    Worker_T w = workers[index];
-    shifts[w] += delta;
-    
-    // Make sure shift count is valid (not negative and not exceeding maximum)
-    if (shifts[w] > shifts.size()) { 
-        shifts[w] -= delta;
+    size_t workerPosition,
+    size_t workerId)
+{
+    // Base case: we've tried all workers without success
+    if (workerId >= avail[0].size()) {
         return false;
     }
     
-    if (updateShifts(workers, shifts, index + 1, delta)) {
+    // Check if this worker is available and hasn't reached max shifts
+    if (avail[day][workerId] && shiftsWorked[workerId] < maxShifts) {
+        // Check if worker is already scheduled for this day
+        if (!workerAlreadyScheduled(sched, day, workerPosition, workerId)) {
+            // Schedule this worker
+            sched[day][workerPosition] = workerId;
+            shiftsWorked[workerId]++;
+            
+            // Recurse to next position
+            if (scheduleHelper(avail, dailyNeed, maxShifts, sched, shiftsWorked, day, workerPosition + 1)) {
+                return true;
+            }
+            
+            // Backtrack if unsuccessful
+            shiftsWorked[workerId]--;
+        }
+    }
+    
+    // Try next worker
+    return tryNextWorker(avail, dailyNeed, maxShifts, sched, shiftsWorked, day, workerPosition, workerId + 1);
+}
+
+bool workerAlreadyScheduled(
+    const DailySchedule& sched,
+    size_t day,
+    size_t currentPosition,
+    Worker_T workerId)
+{
+    // Base case: we've checked all previous positions
+    if (currentPosition == 0) {
+        return false;
+    }
+    
+    // Check if worker is scheduled in any previous position today
+    return checkPreviousPosition(sched, day, currentPosition - 1, workerId);
+}
+
+bool checkPreviousPosition(
+    const DailySchedule& sched,
+    size_t day,
+    size_t position,
+    Worker_T workerId)
+{
+    // Check if worker is scheduled at this position
+    if (sched[day][position] == workerId) {
         return true;
     }
     
-    // If updating remaining shifts failed, backtrack this one too
-    shifts[w] -= delta;
-    return false;
+    // Base case: we've checked position 0
+    if (position == 0) {
+        return false;
+    }
+    
+    // Check previous position
+    return checkPreviousPosition(sched, day, position - 1, workerId);
 }
