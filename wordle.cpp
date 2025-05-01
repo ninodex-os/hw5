@@ -1,7 +1,7 @@
 #ifndef RECCHECK
-//For debugging
+// debugging
 #include <iostream>
-//For std::remove
+// std::remove
 #include <vector>
 #include <map>
 #include <set>
@@ -92,7 +92,7 @@ void backtrack(
         if (word[i] == '-') blanks_left++;
     }
     
-    // Early termination: not enough blanks for required letters
+    // Early termination: not enough blanks required letters
     if (blanks_left < req_remaining) return;
     
     // Try all letters at this position
