@@ -17,7 +17,6 @@ void backtrack(
     size_t pos,
     int req_letters[26],
     int req_remaining,
-    int blanks_left,
     const set<string>& dict,
     set<string>& results
 );
@@ -31,14 +30,14 @@ set<string> wordle(
     string word = in;
     int req_letters[26] = {0}; // Count of required letters a-z
     
-    // Count floating letters
-    for (char c : floating) { // Loop 1/5
+    // Count floating letters (Loop 1/4)
+    for (char c : floating) {
         req_letters[c - 'a']++;
     }
     
-    // Subtract fixed letters and count blanks
+    // Subtract fixed letters from required and count blanks (Loop 2/4)
     int blanks = 0;
-    for (size_t i = 0; i < in.size(); ++i) { // Loop 2/5
+    for (size_t i = 0; i < in.size(); ++i) {
         if (in[i] == '-') {
             blanks++;
         } else if (req_letters[in[i] - 'a'] > 0) {
@@ -46,56 +45,20 @@ set<string> wordle(
         }
     }
     
-    // Count total required letters
+    // Count total required letters (Loop 3/4)
     int req_remaining = 0;
-    for (int i = 0; i < 26; ++i) { // Loop 3/5
+    for (int i = 0; i < 26; ++i) {
         req_remaining += req_letters[i];
     }
     
-    // Special case optimization: if exactly the right number of blanks
-    if (req_remaining == blanks) {
-        // Fast path for patterns like "telecommunications"
-        set<string> results;
-        
-        // Try directly matching against dictionary
-        for (const string& dictWord : dict) { // Loop 4/5
-            if (dictWord.length() != word.length()) continue;
-            
-            // Check if word matches fixed pattern
-            bool matches = true;
-            for (size_t i = 0; i < word.length(); i++) {
-                if (word[i] != '-' && word[i] != dictWord[i]) {
-                    matches = false;
-                    break;
-                }
-            }
-            if (!matches) continue;
-            
-            // Check if word contains all floating letters
-            int letter_count[26] = {0};
-            for (char c : dictWord) {
-                letter_count[c - 'a']++;
-            }
-            
-            bool has_all_floating = true;
-            for (int i = 0; i < 26; i++) {
-                if (req_letters[i] > letter_count[i]) {
-                    has_all_floating = false;
-                    break;
-                }
-            }
-            
-            if (has_all_floating) {
-                results.insert(dictWord);
-            }
-        }
-        
-        return results;
+    // Check if we have enough blank spaces
+    if (req_remaining > blanks) {
+        return {};
     }
     
-    // Fallback to standard backtracking for general cases
+    // Start backtracking
     set<string> results;
-    backtrack(word, 0, req_letters, req_remaining, blanks, dict, results);
+    backtrack(word, 0, req_letters, req_remaining, dict, results);
     
     return results;
 }
@@ -105,7 +68,6 @@ void backtrack(
     size_t pos,
     int req_letters[26],
     int req_remaining,
-    int blanks_left,
     const set<string>& dict,
     set<string>& results
 ) {
@@ -120,35 +82,36 @@ void backtrack(
     
     // Skip fixed positions
     if (word[pos] != '-') {
-        backtrack(word, pos + 1, req_letters, req_remaining, blanks_left, dict, results);
+        backtrack(word, pos + 1, req_letters, req_remaining, dict, results);
         return;
+    }
+    
+    // Calculate remaining blank positions
+    int blanks_left = 0;
+    for (size_t i = pos; i < word.size(); i++) { // Loop 4/4
+        if (word[i] == '-') blanks_left++;
     }
     
     // Early termination: not enough blanks for required letters
     if (blanks_left < req_remaining) return;
     
-    // Try required letters first (optimization)
-    for (int i = 0; i < 26; ++i) { // Loop 5/5
-        if (req_letters[i] > 0) {
-            char c = 'a' + i;
+    // Try all letters at this position
+    for (char c = 'a'; c <= 'z'; c++) {
+        // If this is a required letter, use it
+        if (req_letters[c - 'a'] > 0) {
             word[pos] = c;
-            req_letters[i]--;
+            req_letters[c - 'a']--;
             
-            backtrack(word, pos + 1, req_letters, req_remaining - 1, blanks_left - 1, dict, results);
+            backtrack(word, pos + 1, req_letters, req_remaining - 1, dict, results);
             
             // Backtrack
-            req_letters[i]++;
+            req_letters[c - 'a']++;
             word[pos] = '-';
         }
-    }
-    
-    // Only try non-required letters if we have extra slots
-    if (blanks_left > req_remaining) {
-        for (char c = 'a'; c <= 'z'; ++c) {
-            if (req_letters[c - 'a'] > 0) continue; // Skip required letters
-            
+        // If we have extra slots, we can use non-required letters
+        else if (blanks_left > req_remaining) {
             word[pos] = c;
-            backtrack(word, pos + 1, req_letters, req_remaining, blanks_left - 1, dict, results);
+            backtrack(word, pos + 1, req_letters, req_remaining, dict, results);
             word[pos] = '-';
         }
     }
