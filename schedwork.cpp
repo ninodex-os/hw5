@@ -18,7 +18,7 @@ using namespace std;
 // Feel free to not use or delete.
 static const Worker_T INVALID_ID = (unsigned int)-1;
 
-// Add prototypes for any helper functions here
+// Add prototypes any helper functions here
 bool scheduleHelper(
     const AvailabilityMatrix& avail,
     const size_t dailyNeed,
@@ -88,12 +88,12 @@ bool scheduleHelper(
         return true;
     }
     
-    // If we've filled all worker positions for this day, move to next day
+    // If we've filled all worker positions this day, move to next day
     if (workerPosition >= dailyNeed) {
         return scheduleHelper(avail, dailyNeed, maxShifts, sched, shiftsWorked, day + 1, 0);
     }
     
-    // Try each worker for the current position
+    // Try each worker the current position
     return tryNextWorker(avail, dailyNeed, maxShifts, sched, shiftsWorked, day, workerPosition, 0);
 }
 
@@ -114,7 +114,7 @@ bool tryNextWorker(
     
     // Check if this worker is available and hasn't reached max shifts
     if (avail[day][workerId] && shiftsWorked[workerId] < maxShifts) {
-        // Check if worker is already scheduled for this day
+        // Check if worker is already scheduled this day
         if (!workerAlreadyScheduled(sched, day, workerPosition, workerId)) {
             // Schedule this worker
             sched[day][workerPosition] = workerId;
